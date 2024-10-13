@@ -1,0 +1,72 @@
+import { MongoClient } from 'mongodb';
+import fetch from 'node-fetch';
+
+const DB_CONN_STRING = "mongodb://localhost:27017";
+const DB_NAME = "pokemons";
+const COLLECTION_NAME = "pokemons";
+const client = new MongoClient(DB_CONN_STRING);
+async function fetchAndInsertPokemons() {
+    try {
+        const response = await fetch('https://pokeapi.co/api/v2/pokemon?limit=1302');
+        const data = await response.json();
+        const pokemons = data.results;
+        const db = client.db(DB_NAME);
+        const collection = db.collection(COLLECTION_NAME);
+        await collection.insertMany(pokemons.map((pokemon: { name: string }) => ({ name: pokemon.name })));
+        console.log("Pokemons inserted successfully");
+    } catch (err) {
+        console.error(err);
+    }
+}
+async function incertPokemonsThatStartsWithD() {
+    const db = client.db(DB_NAME);
+    const collection = db.collection(COLLECTION_NAME);
+    const cursor = collection.find({ name: { $regex: new RegExp('^' + 'd', 'i') } });
+    const newCollection = db.collection('pokemonsStartsWithD');
+    for await (const pokemon of cursor) {
+        await newCollection.insertOne(pokemon);
+    }
+}
+async function updatePokemonDetails() {
+    const db = client.db(DB_NAME);
+    const collection = db.collection('pokemonsStartsWithD');
+    const cursor = collection.find({});
+
+    for await (const pokemon of cursor) {
+        const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${pokemon.name}`);
+        const details = await response.json();
+        await collection.updateOne(
+            { _id: pokemon._id,
+             name: pokemon.name, },
+            { 
+                $set: {
+                    details: details 
+                }
+            }
+        );
+    }
+    console.log("Collection update")
+}
+async function deletePokemons() {
+    const db = client.db(DB_NAME);
+    const collection = db.collection('pokemonsStartsWithD');
+    const regex = new RegExp('^.a', 'i');
+    const result = await collection.deleteMany({ name: regex });
+}
+async function main() {
+    try {
+        await client.connect();
+        console.log("Connected to the database");
+
+        await fetchAndInsertPokemons();
+        await incertPokemonsThatStartsWithD();
+        await updatePokemonDetails();
+        await deletePokemons();
+        console.log("End");
+        await client.close();
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+main();
