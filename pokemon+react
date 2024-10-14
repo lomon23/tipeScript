@@ -1,0 +1,176 @@
+import React from 'react';
+import axios from 'axios';
+import { BrowserRouter as Router, Route, Routes, Link, useParams } from 'react-router-dom';
+import Card from '@mui/material/Card';
+import CardHeader from '@mui/material/CardHeader';
+import CardMedia from '@mui/material/CardMedia';
+import CardContent from '@mui/material/CardContent';
+import CardActions from '@mui/material/CardActions';
+import Avatar from '@mui/material/Avatar';
+import IconButton from '@mui/material/IconButton';
+import Typography from '@mui/material/Typography';
+import { red } from '@mui/material/colors';
+import FavoriteIcon from '@mui/icons-material/Favorite';
+import ShareIcon from '@mui/icons-material/Share';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import Collapse from '@mui/material/Collapse';
+import { styled } from '@mui/material/styles';
+import Paper from '@mui/material/Paper';
+
+const ExpandMore = styled((props) => {
+  const { expand, ...other } = props;
+  return <IconButton {...other} />;
+})(({ theme }) => ({
+    marginLeft: 'auto',
+    transition: theme.transitions.create('transform', {
+      duration: theme.transitions.duration.shortest,
+    }),
+    transform: (props) => (props.expand ? 'rotate(180deg)' : 'rotate(0deg)'),
+}));
+
+class PokemonApp extends React.Component {
+  state = {
+    pokemons: [],
+  };
+
+  componentDidMount() {
+    axios.get(`https://pokeapi.co/api/v2/pokemon?limit=20`)
+      .then(res => {
+        const promises = res.data.results.map(pokemon =>
+          axios.get(pokemon.url)
+        );
+
+        Promise.all(promises).then((responses) => {
+          const pokemons = responses.map(r => ({
+            name: r.data.name,
+            height: r.data.height,
+            weight: r.data.weight,
+            id: r.data.id,
+            image: r.data.sprites.front_default, // Додаємо зображення покемона
+          }));
+          this.setState({ pokemons });
+        });
+      })
+      .catch(error => console.error("Error fetching Pokémon data:", error));
+  }
+
+  render() {
+    return (
+      <Router>
+        <Routes>
+          <Route path="/" element={this.renderPokemonList()} />
+          <Route path="/pokemon/:id" element={<PokemonDetail />} />
+        </Routes>
+      </Router>
+    );
+  }
+
+  renderPokemonList() {
+    return (
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', padding: '16px' }}>
+        {this.state.pokemons.map((pokemon) => (
+          <Card key={pokemon.id} sx={{ maxWidth: 345 }}>
+            <CardHeader
+              avatar={
+                <Avatar sx={{ bgcolor: red[500] }} aria-label="recipe">
+                  {pokemon.name.charAt(0).toUpperCase()} {/* Перший символ імені покемона */}
+                </Avatar>
+              }
+              title={pokemon.name}
+            />
+            <CardMedia
+              component="img"
+              height="194"
+              image={pokemon.image}
+              alt={pokemon.name}
+            />
+            <CardContent>
+              <Typography variant="body2" color="text.secondary">
+                Height: {pokemon.height} m
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Weight: {pokemon.weight} kg
+              </Typography>
+            </CardContent>
+            <CardActions disableSpacing>
+              <Link to={`/pokemon/${pokemon.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                <Typography variant="body2">View Details</Typography>
+              </Link>
+            </CardActions>
+          </Card>
+        ))}
+      </div>
+    );
+  }
+}
+
+const PokemonDetail = () => {
+  const { id } = useParams();
+  const [pokemon, setPokemon] = React.useState(null);
+  const [expanded, setExpanded] = React.useState(false);
+
+  React.useEffect(() => {
+    axios.get(`https://pokeapi.co/api/v2/pokemon/${id}`)
+      .then(res => {
+        setPokemon(res.data);
+      })
+      .catch(error => console.error("Error fetching Pokémon details:", error));
+  }, [id]);
+
+  const handleExpandClick = () => {
+    setExpanded(!expanded);
+  };
+
+  if (!pokemon) {
+    return <div>Loading...</div>;
+  }
+
+  return (
+    <Card sx={{ maxWidth: 345, margin: '16px auto' }}>
+      <CardHeader
+        avatar={
+          <Avatar sx={{ bgcolor: red[500] }} aria-label="recipe">
+            {pokemon.name.charAt(0).toUpperCase()}
+          </Avatar>
+        }
+        title={pokemon.name}
+      />
+      <CardMedia
+        component="img"
+        height="194"
+        image={pokemon.sprites.front_default}
+        alt={pokemon.name}
+      />
+      <CardContent>
+        <Typography variant="body2" color="text.secondary">
+          Height: {pokemon.height}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Weight: {pokemon.weight}
+        </Typography>
+      </CardContent>
+      <CardActions disableSpacing>
+        <ExpandMore
+          expand={expanded}
+          onClick={handleExpandClick}
+          aria-expanded={expanded}
+          aria-label="show more"
+        >
+          <ExpandMoreIcon />
+        </ExpandMore>
+      </CardActions>
+      <Collapse in={expanded} timeout="auto" unmountOnExit>
+        <CardContent>
+          <Typography paragraph>Abilities:</Typography>
+          {pokemon.abilities.map((ability) => (
+            <Typography key={ability.ability.name} paragraph>
+              - {ability.ability.name}
+            </Typography>
+          ))}
+        </CardContent>
+      </Collapse>
+    </Card>
+  );
+}
+
+export default PokemonApp;
